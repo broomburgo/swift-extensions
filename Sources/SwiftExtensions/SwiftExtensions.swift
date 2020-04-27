@@ -126,8 +126,8 @@ extension Result {
   public static func zipWith<A, B, Final>(
     _ ra: Result<A, Failure>,
     _ rb: Result<B, Failure>,
-    _ mergeFailures: (Failure, Failure) -> Failure = { f, _ in f },
-    _ transform: (A, B) -> Final
+    _ transform: (A, B) -> Final,
+    mergeFailures: (Failure, Failure) -> Failure = { f, _ in f }
   ) -> Result<Final, Failure> {
     switch (ra, rb) {
     case let (.success(a), .success(b)):
@@ -148,16 +148,15 @@ extension Result {
     _ ra: Result<A, Failure>,
     _ rb: Result<B, Failure>,
     _ rc: Result<C, Failure>,
-    _ mergeFailures: (Failure, Failure) -> Failure = { f, _ in f },
-    _ transform: (A, B, C) -> Final
+    _ transform: (A, B, C) -> Final,
+    mergeFailures: (Failure, Failure) -> Failure = { f, _ in f }
   ) -> Result<Final, Failure> {
     zipWith(
       ra,
-      zipWith(rb, rc, mergeFailures) { ($0, $1) },
-      mergeFailures
-    ) { a, bc in
-      transform(a, bc.0, bc.1)
-    }
+      zipWith(rb, rc, { ($0, $1) }, mergeFailures: mergeFailures),
+      { a, bc in transform(a, bc.0, bc.1) },
+      mergeFailures: mergeFailures
+    )
   }
 
   public static func zipWith<A, B, C, D, Final>(
@@ -165,16 +164,15 @@ extension Result {
     _ rb: Result<B, Failure>,
     _ rc: Result<C, Failure>,
     _ rd: Result<D, Failure>,
-    _ mergeFailures: (Failure, Failure) -> Failure = { f, _ in f },
-    _ transform: (A, B, C, D) -> Final
+    _ transform: (A, B, C, D) -> Final,
+    mergeFailures: (Failure, Failure) -> Failure = { f, _ in f }
   ) -> Result<Final, Failure> {
     zipWith(
       ra,
-      zipWith(rb, rc, rd, mergeFailures) { ($0, $1, $2) },
-      mergeFailures
-    ) { a, bcd in
-      transform(a, bcd.0, bcd.1, bcd.2)
-    }
+      zipWith(rb, rc, rd, { ($0, $1, $2) }, mergeFailures: mergeFailures),
+      { a, bcd in transform(a, bcd.0, bcd.1, bcd.2) },
+      mergeFailures: mergeFailures
+    )
   }
 
   public static func zipWith<A, B, C, D, E, Final>(
@@ -183,16 +181,15 @@ extension Result {
     _ rc: Result<C, Failure>,
     _ rd: Result<D, Failure>,
     _ re: Result<E, Failure>,
-    _ mergeFailures: (Failure, Failure) -> Failure = { f, _ in f },
-    _ transform: (A, B, C, D, E) -> Final
+    _ transform: (A, B, C, D, E) -> Final,
+    mergeFailures: (Failure, Failure) -> Failure = { f, _ in f }
   ) -> Result<Final, Failure> {
     zipWith(
       ra,
-      zipWith(rb, rc, rd, re, mergeFailures) { ($0, $1, $2, $3) },
-      mergeFailures
-    ) { a, bcde in
-      transform(a, bcde.0, bcde.1, bcde.2, bcde.3)
-    }
+      zipWith(rb, rc, rd, re, { ($0, $1, $2, $3) }, mergeFailures: mergeFailures),
+      { a, bcde in transform(a, bcde.0, bcde.1, bcde.2, bcde.3) },
+      mergeFailures: mergeFailures
+    )
   }
 }
 
