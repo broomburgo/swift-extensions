@@ -4,10 +4,11 @@
 import PackageDescription
 
 let package = Package(
-  name: "SwiftExtensions",
+  name: "swift-extensions",
   products: [
     .library(
       name: "SwiftExtensions",
+      type: .dynamic,
       targets: ["SwiftExtensions"]
     ),
   ],
