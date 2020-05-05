@@ -2,6 +2,18 @@
 
 public func absurd<A>(_ never: Never) -> A {}
 
+public struct Func<Input, Output> {
+  public var run: (Input) -> Output
+
+  public init(_ run: @escaping (Input) -> Output) {
+    self.run = run
+  }
+
+  public func callAsFunction(_ input: Input) -> Output {
+    run(input)
+  }
+}
+
 // MARK: - Optional
 
 extension Optional {
