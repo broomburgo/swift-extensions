@@ -124,6 +124,10 @@ extension Result {
     fold(onSuccess: { $0 }, onFailure: { _ in nil })
   }
 
+  public var failureValue: Failure? {
+    fold(onSuccess: { _ in nil }, onFailure: { $0 })
+  }
+
   public init(ifNotNil success: Success?, elseFailWith error: @autoclosure () -> Failure) {
     self = success.fold(
       onSome: { .success($0) },
