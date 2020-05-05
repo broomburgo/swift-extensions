@@ -128,6 +128,14 @@ extension Result {
     fold(onSuccess: { _ in nil }, onFailure: { $0 })
   }
 
+  public var isSucceeded: Bool {
+    fold(onSuccess: { _ in true }, onFailure: { _ in false })
+  }
+
+  public var isFailed: Bool {
+    fold(onSuccess: { _ in false }, onFailure: { _ in true })
+  }
+
   public init(ifNotNil success: Success?, elseFailWith error: @autoclosure () -> Failure) {
     self = success.fold(
       onSome: { .success($0) },
