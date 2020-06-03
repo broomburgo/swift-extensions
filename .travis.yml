@@ -1,0 +1,12 @@
+language: swift
+osx_image: xcode11.4
+branches:
+  only:
+  - master
+jobs:
+  include:
+    - stage: master
+      name: master
+      if: branch = master
+      script:
+        - echo "OK"
