@@ -320,3 +320,50 @@ public struct Accessor<Value> {
     )
   }
 }
+
+// MARK: - Wrapper
+
+public protocol Wrapper {
+  associatedtype Wrapped
+  var wrapped: Wrapped { get }
+  init(_ wrapped: Wrapped)
+}
+
+extension Wrapper {
+  public subscript<A>(dynamicMember keyPath: KeyPath<Wrapped, A>) -> A {
+    wrapped[keyPath: keyPath]
+  }
+}
+
+extension Wrapper where Wrapped: Decodable {
+  public init(from decoder: Decoder) throws {
+    try self.init(Wrapped(from: decoder))
+  }
+}
+
+extension Wrapper where Wrapped: Encodable {
+  public func encode(to encoder: Encoder) throws {
+    try wrapped.encode(to: encoder)
+  }
+}
+
+extension Wrapper where Wrapped: Collection {
+  public typealias Index = Wrapped.Index
+  public typealias Element = Wrapped.Element
+
+  public var startIndex: Index {
+    wrapped.startIndex
+  }
+
+  public var endIndex: Index {
+    wrapped.endIndex
+  }
+
+  public subscript(position: Index) -> Element {
+    wrapped[position]
+  }
+
+  public func index(after i: Index) -> Index {
+    wrapped.index(after: i)
+  }
+}
