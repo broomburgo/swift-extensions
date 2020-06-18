@@ -367,3 +367,22 @@ extension Wrapper where Wrapped: Collection {
     wrapped.index(after: i)
   }
 }
+
+// MARK: - Operators
+
+precedencegroup FunctionApplication {
+  associativity: left
+}
+
+infix operator |>: FunctionApplication
+infix operator &>: FunctionApplication
+
+public func |> <Input, Output>(value: Input, function: (Input) throws -> Output) rethrows -> Output {
+  try function(value)
+}
+
+public func &> <Input>(value: Input, function: (inout Input) throws -> Void) rethrows -> Input {
+  var m_value = value
+  try function(&m_value)
+  return m_value
+}
