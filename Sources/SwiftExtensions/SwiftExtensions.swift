@@ -17,14 +17,6 @@ public struct Func<Input, Output> {
 // MARK: - Optional
 
 extension Optional {
-  public func get(orThrow error: @autoclosure () -> Error) throws -> Wrapped {
-    if let self = self {
-      return self
-    } else {
-      throw error()
-    }
-  }
-
   public func filter(_ condition: (Wrapped) -> Bool) -> Self {
     flatMap {
       condition($0) ? .some($0) : .none
