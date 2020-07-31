@@ -134,7 +134,7 @@ public func <<<= <A, B>(
 // MARK: - Func
 
 public struct Func<Input, Output> {
-  public let run: (Input) -> Output
+  public var run: (Input) -> Output
 
   public init(_ run: @escaping (Input) -> Output) {
     self.run = run
@@ -142,6 +142,21 @@ public struct Func<Input, Output> {
 
   public func callAsFunction(_ input: Input) -> Output {
     run(input)
+  }
+
+  public mutating func append(_ transform: @escaping (inout Output) -> Void) {
+    let current = run
+    run = {
+      var output = current($0)
+      transform(&output)
+      return output
+    }
+  }
+}
+
+extension Func where Input == Void {
+  public func callAsFunction() -> Output {
+    run(())
   }
 }
 
