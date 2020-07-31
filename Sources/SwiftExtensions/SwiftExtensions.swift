@@ -1,6 +1,33 @@
-// MARK: - Functions
+// MARK: - Functions & Operators
+
+public func when<A>(_ condition: Bool, then ifTrue: () -> A, else ifFalse: () -> A) -> A {
+  if condition {
+    return ifTrue()
+  } else {
+    return ifFalse()
+  }
+}
 
 public func absurd<A>(_ never: Never) -> A {}
+
+precedencegroup FunctionApplication {
+  associativity: left
+}
+
+infix operator |>: FunctionApplication
+infix operator &>: FunctionApplication
+
+public func |> <Input, Output>(value: Input, function: (Input) throws -> Output) rethrows -> Output {
+  try function(value)
+}
+
+public func &> <Input>(value: Input, function: (inout Input) throws -> Void) rethrows -> Input {
+  var m_value = value
+  try function(&m_value)
+  return m_value
+}
+
+// MARK: - Func
 
 public struct Func<Input, Output> {
   public let run: (Input) -> Output
@@ -16,25 +43,33 @@ public struct Func<Input, Output> {
 
 // MARK: - Optional
 
+public func whenSome<A, B>(_ value: A?, then ifSome: (A) -> B, else ifNone: () -> B) -> B {
+  switch value {
+  case let .some(x):
+    return ifSome(x)
+
+  case .none:
+    return ifNone()
+  }
+}
+
 extension Optional {
   public func filter(_ condition: (Wrapped) -> Bool) -> Self {
-    flatMap {
-      condition($0) ? .some($0) : .none
-    }
-  }
-
-  public func fold<A>(onSome: (Wrapped) -> A, onNone: () -> A) -> A {
     switch self {
-    case let .some(x):
-      return onSome(x)
+    case let .some(value) where condition(value):
+      return self
 
-    case .none:
-      return onNone()
+    default:
+      return nil
     }
   }
 
   public func forEach(_ run: (Wrapped) -> Void) {
-    fold(onSome: run, onNone: {})
+    whenSome(self) {
+      run($0)
+    } else: {
+      /// ignore
+    }
   }
 }
 
@@ -103,44 +138,72 @@ extension Optional {
 
 // MARK: - Result
 
+public func whenSuccess<A, E, B>(_ result: Result<A, E>, then ifSuccess: (A) -> B, else ifFailure: (E) -> B) -> B {
+  switch result {
+  case .success(let value):
+    return ifSuccess(value)
+
+  case .failure(let error):
+    return ifFailure(error)
+  }
+}
+
 extension Result {
-  public func filter(_ condition: (Success) -> Bool, orFailWith getError: (Success) -> Failure) -> Self {
-    flatMap {
-      condition($0) ? .success($0) : .failure(getError($0))
-    }
-  }
-
-  public func fold<A>(onSuccess: (Success) -> A, onFailure: (Failure) -> A) -> A {
+  public func filter(
+    _ condition: (Success) -> Bool,
+    orFailWith getError: (Success) -> Failure
+  ) -> Self {
     switch self {
-    case let .success(x):
-      return onSuccess(x)
+    case .success(let value):
+      return when(condition(value)) {
+        self
+      } else: {
+        .failure(getError(value))
+      }
 
-    case let .failure(x):
-      return onFailure(x)
+    default:
+      return self
     }
   }
 
-  public var successValue: Success? {
-    fold(onSuccess: { $0 }, onFailure: { _ in nil })
+  public var success: Success? {
+    whenSuccess(self) {
+      $0
+    } else: { _ in
+      nil
+    }
   }
 
-  public var failureValue: Failure? {
-    fold(onSuccess: { _ in nil }, onFailure: { $0 })
+  public var failure: Failure? {
+    whenSuccess(self) { _ in
+      nil
+    } else: {
+      $0
+    }
   }
 
-  public var isSucceeded: Bool {
-    fold(onSuccess: { _ in true }, onFailure: { _ in false })
+  public var isSuccess: Bool {
+    whenSuccess(self) { _ in
+      true
+    } else: { _ in
+      false
+    }
   }
 
-  public var isFailed: Bool {
-    fold(onSuccess: { _ in false }, onFailure: { _ in true })
+  public var isFailure: Bool {
+    whenSuccess(self) { _ in
+      false
+    } else: { _ in
+      true
+    }
   }
 
-  public init(ifNotNil success: Success?, elseFailWith error: @autoclosure () -> Failure) {
-    self = success.fold(
-      onSome: { .success($0) },
-      onNone: { .failure(error()) }
-    )
+  public init(ifNotNil success: Success?, elseFailWith getError: @autoclosure () -> Failure) {
+    self = whenSome(success) {
+      .success($0)
+    } else: {
+      .failure(getError())
+    }
   }
 }
 
@@ -151,7 +214,7 @@ extension Result {
     _ ra: Result<A, Failure>,
     _ rb: Result<B, Failure>,
     _ transform: (A, B) -> Final,
-    mergeFailures: (Failure, Failure) -> Failure = { f, _ in f }
+    mergeFailures: (Failure, Failure) -> Failure
   ) -> Result<Final, Failure> {
     switch (ra, rb) {
     case let (.success(a), .success(b)):
@@ -168,12 +231,24 @@ extension Result {
     }
   }
 
+  public static func zipWith<A, B, Final>(
+    _ ra: Result<A, Failure>,
+    _ rb: Result<B, Failure>,
+    _ transform: (A, B) -> Final
+  ) -> Result<Final, Failure> {
+    zipWith(ra, rb) {
+      transform($0, $1)
+    } mergeFailures: { a, _ in
+      a
+    }
+  }
+
   public static func zipWith<A, B, C, Final>(
     _ ra: Result<A, Failure>,
     _ rb: Result<B, Failure>,
     _ rc: Result<C, Failure>,
     _ transform: (A, B, C) -> Final,
-    mergeFailures: (Failure, Failure) -> Failure = { f, _ in f }
+    mergeFailures: (Failure, Failure) -> Failure
   ) -> Result<Final, Failure> {
     zipWith(
       ra,
@@ -183,18 +258,62 @@ extension Result {
     )
   }
 
+  public static func zipWith<A, B, C, Final>(
+    _ ra: Result<A, Failure>,
+    _ rb: Result<B, Failure>,
+    _ rc: Result<C, Failure>,
+    _ transform: (A, B, C) -> Final
+  ) -> Result<Final, Failure> {
+    zipWith(ra, rb, rc) {
+      transform($0, $1, $2)
+    } mergeFailures: { a, _ in
+      a
+    }
+  }
+
   public static func zipWith<A, B, C, D, Final>(
     _ ra: Result<A, Failure>,
     _ rb: Result<B, Failure>,
     _ rc: Result<C, Failure>,
     _ rd: Result<D, Failure>,
     _ transform: (A, B, C, D) -> Final,
-    mergeFailures: (Failure, Failure) -> Failure = { f, _ in f }
+    mergeFailures: (Failure, Failure) -> Failure
   ) -> Result<Final, Failure> {
     zipWith(
       ra,
       zipWith(rb, rc, rd, { ($0, $1, $2) }, mergeFailures: mergeFailures),
       { a, bcd in transform(a, bcd.0, bcd.1, bcd.2) },
+      mergeFailures: mergeFailures
+    )
+  }
+
+  public static func zipWith<A, B, C, D, Final>(
+    _ ra: Result<A, Failure>,
+    _ rb: Result<B, Failure>,
+    _ rc: Result<C, Failure>,
+    _ rd: Result<D, Failure>,
+    _ transform: (A, B, C, D) -> Final
+  ) -> Result<Final, Failure> {
+    zipWith(ra, rb, rc, rd) {
+      transform($0, $1, $2, $3)
+    } mergeFailures: { a, _ in
+      a
+    }
+  }
+
+  public static func zipWith<A, B, C, D, E, Final>(
+    _ ra: Result<A, Failure>,
+    _ rb: Result<B, Failure>,
+    _ rc: Result<C, Failure>,
+    _ rd: Result<D, Failure>,
+    _ re: Result<E, Failure>,
+    _ transform: (A, B, C, D, E) -> Final,
+    mergeFailures: (Failure, Failure) -> Failure
+  ) -> Result<Final, Failure> {
+    zipWith(
+      ra,
+      zipWith(rb, rc, rd, re, { ($0, $1, $2, $3) }, mergeFailures: mergeFailures),
+      { a, bcde in transform(a, bcde.0, bcde.1, bcde.2, bcde.3) },
       mergeFailures: mergeFailures
     )
   }
@@ -205,15 +324,13 @@ extension Result {
     _ rc: Result<C, Failure>,
     _ rd: Result<D, Failure>,
     _ re: Result<E, Failure>,
-    _ transform: (A, B, C, D, E) -> Final,
-    mergeFailures: (Failure, Failure) -> Failure = { f, _ in f }
+    _ transform: (A, B, C, D, E) -> Final
   ) -> Result<Final, Failure> {
-    zipWith(
-      ra,
-      zipWith(rb, rc, rd, re, { ($0, $1, $2, $3) }, mergeFailures: mergeFailures),
-      { a, bcde in transform(a, bcde.0, bcde.1, bcde.2, bcde.3) },
-      mergeFailures: mergeFailures
-    )
+    zipWith(ra, rb, rc, rd, re) {
+      transform($0, $1, $2, $3, $4)
+    } mergeFailures: { a, _ in
+      a
+    }
   }
 }
 
@@ -279,10 +396,6 @@ extension Bool {
   public var not: Bool {
     !self
   }
-
-  public func fold<A>(onTrue: @autoclosure () -> A, onFalse: @autoclosure () -> A) -> A {
-    self ? onTrue() : onFalse()
-  }
 }
 
 // MARK: - Utility
@@ -290,11 +403,11 @@ extension Bool {
 extension String.StringInterpolation {
   public mutating func appendInterpolation<A>(_ optionalValue: A?, or defaultString: String) {
     guard let value = optionalValue else {
-      appendLiteral(defaultString)
+      appendInterpolation(defaultString)
       return
     }
 
-    appendLiteral("\(value)")
+    appendInterpolation(value)
   }
 }
 
@@ -326,6 +439,9 @@ public struct Accessor<Value> {
 public protocol Wrapper {
   associatedtype Wrapped
   var wrapped: Wrapped { get }
+}
+
+public protocol InitializableWrapper: Wrapper {
   init(_ wrapped: Wrapped)
 }
 
@@ -335,7 +451,7 @@ extension Wrapper {
   }
 }
 
-extension Wrapper where Wrapped: Decodable {
+extension InitializableWrapper where Wrapped: Decodable {
   public init(from decoder: Decoder) throws {
     try self.init(Wrapped(from: decoder))
   }
@@ -366,23 +482,4 @@ extension Wrapper where Wrapped: Collection {
   public func index(after i: Index) -> Index {
     wrapped.index(after: i)
   }
-}
-
-// MARK: - Operators
-
-precedencegroup FunctionApplication {
-  associativity: left
-}
-
-infix operator |>: FunctionApplication
-infix operator &>: FunctionApplication
-
-public func |> <Input, Output>(value: Input, function: (Input) throws -> Output) rethrows -> Output {
-  try function(value)
-}
-
-public func &> <Input>(value: Input, function: (inout Input) throws -> Void) rethrows -> Input {
-  var m_value = value
-  try function(&m_value)
-  return m_value
 }
