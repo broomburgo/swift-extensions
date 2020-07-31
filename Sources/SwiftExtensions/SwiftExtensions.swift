@@ -10,12 +10,12 @@ public func when<A>(_ condition: Bool, then ifTrue: () -> A, else ifFalse: () ->
 
 public func absurd<A>(_ never: Never) -> A {}
 
-precedencegroup FunctionApplication {
+precedencegroup FunctionApplicationPrecedence {
   associativity: left
 }
 
-infix operator |>: FunctionApplication
-infix operator &>: FunctionApplication
+infix operator |>: FunctionApplicationPrecedence
+infix operator &>: FunctionApplicationPrecedence
 
 public func |> <Input, Output>(value: Input, function: (Input) throws -> Output) rethrows -> Output {
   try function(value)
@@ -25,6 +25,110 @@ public func &> <Input>(value: Input, function: (inout Input) throws -> Void) ret
   var m_value = value
   try function(&m_value)
   return m_value
+}
+
+precedencegroup ForwardFunctionCompositionPrecedence{
+  associativity: left
+  lowerThan: TernaryPrecedence
+  higherThan: FunctionArrowPrecedence
+}
+
+infix operator >>>: ForwardFunctionCompositionPrecedence
+
+public func >>> <A, B>(
+  lhs: @escaping () -> A,
+  rhs: @escaping (A) -> B
+) -> () -> B {
+  { rhs(lhs()) }
+}
+
+public func >>> <A, B, C>(
+  lhs: @escaping (A) -> B,
+  rhs: @escaping (B) -> C
+) -> (A) -> C {
+  { a in rhs(lhs(a)) }
+}
+
+public func >>> <A, B, C>(
+  lhs: @escaping (A) throws -> B,
+  rhs: @escaping (B) -> C
+) -> (A) throws -> C {
+  { a in try rhs(lhs(a)) }
+}
+
+public func >>> <A, B, C>(
+  lhs: @escaping (A) -> B,
+  rhs: @escaping (B) throws -> C
+) -> (A) throws -> C {
+  { a in try rhs(lhs(a)) }
+}
+
+public func >>> <A, B, C>(
+  lhs: @escaping (A) throws -> B,
+  rhs: @escaping (B) throws -> C
+) -> (A) throws -> C {
+  { a in try rhs(lhs(a)) }
+}
+
+infix operator >>>=: AssignmentPrecedence
+
+public func >>>= <A>(
+  lhs: inout () -> A,
+  rhs: @escaping (A) -> A
+) {
+  lhs = lhs >>> rhs
+}
+
+public func >>>= <A, B>(
+  lhs: inout (A) -> B,
+  rhs: @escaping (B) -> B
+) {
+  lhs = lhs >>> rhs
+}
+
+precedencegroup BackwardFunctionCompositionPrecedence {
+  associativity: right
+  lowerThan: TernaryPrecedence
+  higherThan: FunctionArrowPrecedence
+}
+
+infix operator <<<: BackwardFunctionCompositionPrecedence
+
+public func <<< <A, B, C>(
+  lhs: @escaping (B) -> C,
+  rhs: @escaping (A) -> B
+) -> (A) -> C {
+  { a in lhs(rhs(a)) }
+}
+
+public func <<< <A, B, C>(
+  lhs: @escaping (B) throws -> C,
+  rhs: @escaping (A) -> B
+) -> (A) throws -> C {
+  { a in try lhs(rhs(a)) }
+}
+
+public func <<< <A, B, C>(
+  lhs: @escaping (B) -> C,
+  rhs: @escaping (A) throws -> B
+) -> (A) throws -> C {
+  { a in try lhs(rhs(a)) }
+}
+
+public func <<< <A, B, C>(
+  lhs: @escaping (B) throws -> C,
+  rhs: @escaping (A) throws -> B
+) -> (A) throws -> C {
+  { a in try lhs(rhs(a)) }
+}
+
+infix operator <<<=: AssignmentPrecedence
+
+public func <<<= <A, B>(
+  lhs: inout (A) -> B,
+  rhs: @escaping (A) -> A
+) {
+  lhs = lhs <<< rhs
 }
 
 // MARK: - Func
@@ -69,6 +173,14 @@ extension Optional {
       run($0)
     } else: {
       /// ignore
+    }
+  }
+
+  public func unwrapOr(_ fallback: () -> Wrapped) -> Wrapped {
+    whenSome(self) {
+      $0
+    } else: {
+      fallback()
     }
   }
 }
@@ -195,6 +307,14 @@ extension Result {
       false
     } else: { _ in
       true
+    }
+  }
+
+  public func getSuccessOr(_ fallback: () -> Success) -> Success {
+    whenSuccess(self) {
+      $0
+    } else: { _ in
+      fallback()
     }
   }
 
@@ -355,6 +475,16 @@ extension Comparable {
       return self
     }
   }
+
+  /// Dual of the `contains` method on `ClosedRange`.
+  public func isContained(in range: ClosedRange<Self>) -> Bool {
+    range.contains(self)
+  }
+
+  /// Dual of the `contains` method on `Range`.
+  public func isContained(in range: Range<Self>) -> Bool {
+    range.contains(self)
+  }
 }
 
 extension Collection {
@@ -434,6 +564,27 @@ public struct Accessor<Value> {
   }
 }
 
+struct FailableAccessor<Value> {
+  public var get: () throws -> Value
+  public var set: (Value) throws -> Void
+
+  public init(
+    get: @escaping () throws -> Value,
+    set: @escaping (Value) throws -> Void
+  ) {
+    self.get = get
+    self.set = set
+  }
+
+  public init(initial: Value) {
+    var value = initial
+    self.init(
+      get: { value },
+      set: { value = $0 }
+    )
+  }
+}
+
 // MARK: - Wrapper
 
 public protocol Wrapper {
@@ -483,3 +634,14 @@ extension Wrapper where Wrapped: Collection {
     wrapped.index(after: i)
   }
 }
+
+// MARK: - Unit
+
+/// The `Unit` type, completely equivalent to `Void`, but useful for `Equatable`, `Hashable` and `Codable` purposes.
+public struct Unit: Hashable, Codable {
+  public func to<A>(_ value: A) -> A {
+    value
+  }
+}
+
+public let unit = Unit()
