@@ -564,13 +564,13 @@ public struct Accessor<Value> {
   }
 }
 
-struct FailableAccessor<Value> {
-  public var get: () throws -> Value
-  public var set: (Value) throws -> Void
+public struct FailableAccessor<Value, Failure> where Failure: Error {
+  public var get: () -> Result<Value, Failure>
+  public var set: (Value) -> Result<Void, Failure>
 
   public init(
-    get: @escaping () throws -> Value,
-    set: @escaping (Value) throws -> Void
+    get: @escaping () -> Result<Value, Failure>,
+    set: @escaping (Value) -> Result<Void, Failure>
   ) {
     self.get = get
     self.set = set
@@ -579,8 +579,8 @@ struct FailableAccessor<Value> {
   public init(initial: Value) {
     var value = initial
     self.init(
-      get: { value },
-      set: { value = $0 }
+      get: { .success(value) },
+      set: { value = $0; return .success(()) }
     )
   }
 }
