@@ -8,6 +8,14 @@ public func when<A>(_ condition: Bool, then ifTrue: () -> A, else ifFalse: () ->
   }
 }
 
+public func maybe<A>(_ condition: Bool, then ifTrue: () -> A) -> A? {
+  if condition {
+    return ifTrue()
+  } else {
+    return nil
+  }
+}
+
 public func absurd<A>(_ never: Never) -> A {}
 
 precedencegroup FunctionApplicationPrecedence {
