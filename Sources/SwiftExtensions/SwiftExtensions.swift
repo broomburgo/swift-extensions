@@ -8,7 +8,7 @@ public func when<A>(_ condition: Bool, then ifTrue: () -> A, else ifFalse: () ->
   }
 }
 
-public func maybe<A>(_ condition: Bool, then ifTrue: () -> A) -> A? {
+public func optionally<A>(_ condition: Bool, then ifTrue: () -> A) -> A? {
   if condition {
     return ifTrue()
   } else {
@@ -20,6 +20,8 @@ public func absurd<A>(_ never: Never) -> A {}
 
 precedencegroup FunctionApplicationPrecedence {
   associativity: left
+  lowerThan: NilCoalescingPrecedence
+  higherThan: ComparisonPrecedence
 }
 
 infix operator |>: FunctionApplicationPrecedence
@@ -301,6 +303,10 @@ extension Result {
     }
   }
 
+  public func or(_ getFallback: () -> Self) -> Self {
+    flatMapError { _ in getFallback() }
+  }
+
   public var success: Success? {
     whenSuccess(self) {
       $0
@@ -485,6 +491,12 @@ extension Equatable {
   }
 }
 
+extension Hashable {
+  public func subscripting<Value>(_ dict: [Self: Value]) -> Value? {
+    dict[self]
+  }
+}
+
 extension Comparable {
   public func clamped(in range: ClosedRange<Self>) -> Self {
     switch self {
@@ -511,7 +523,7 @@ extension Comparable {
 }
 
 extension Collection {
-  public var decomposed: (head: Element, tail: DropFirstSequence<Self>)? {
+  public var decomposed: (first: Element, rest: DropFirstSequence<Self>)? {
     first.map { ($0, dropFirst()) }
   }
 }
@@ -520,14 +532,6 @@ extension RandomAccessCollection {
   public subscript(safely index: Index) -> Element? {
     guard indices.contains(index) else { return nil }
     return self[index]
-  }
-}
-
-extension RangeReplaceableCollection {
-  public func appending(_ newElement: Element) -> Self {
-    var this = self
-    this.append(newElement)
-    return this
   }
 }
 
@@ -588,12 +592,12 @@ public struct Accessor<Value> {
 }
 
 public struct FailableAccessor<Value, Failure> where Failure: Error {
-  public var get: () -> Result<Value, Failure>
-  public var set: (Value) -> Result<Void, Failure>
+  public var get: () throws -> Value
+  public var set: (Value) throws -> Void
 
   public init(
-    get: @escaping () -> Result<Value, Failure>,
-    set: @escaping (Value) -> Result<Void, Failure>
+    get: @escaping () throws -> Value,
+    set: @escaping (Value) throws -> Void
   ) {
     self.get = get
     self.set = set
@@ -602,8 +606,8 @@ public struct FailableAccessor<Value, Failure> where Failure: Error {
   public init(initial: Value) {
     var value = initial
     self.init(
-      get: { .success(value) },
-      set: { value = $0; return .success(()) }
+      get: { value },
+      set: { value = $0; return () }
     )
   }
 }
