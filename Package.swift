@@ -8,7 +8,6 @@ let package = Package(
   products: [
     .library(
       name: "SwiftExtensions",
-      type: .dynamic,
       targets: ["SwiftExtensions"]
     ),
   ],
