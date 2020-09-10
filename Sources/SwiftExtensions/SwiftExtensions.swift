@@ -307,22 +307,6 @@ extension Result {
     flatMapError { _ in getFallback() }
   }
 
-  public var success: Success? {
-    whenSuccess(self) {
-      $0
-    } else: { _ in
-      nil
-    }
-  }
-
-  public var failure: Failure? {
-    whenSuccess(self) { _ in
-      nil
-    } else: {
-      $0
-    }
-  }
-
   public var isSuccess: Bool {
     whenSuccess(self) { _ in
       true
