@@ -575,7 +575,7 @@ public struct Accessor<Value> {
   }
 }
 
-public struct FailableAccessor<Value, Failure> where Failure: Error {
+public struct FailableAccessor<Value> {
   public var get: () throws -> Value
   public var set: (Value) throws -> Void
 
