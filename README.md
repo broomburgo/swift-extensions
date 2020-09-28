@@ -1,2 +1,3 @@
 # swift-extensions
-Single file with essential Swift standard library extensions.
+
+Single file with some essential Swift standard library extensions.
