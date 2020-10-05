@@ -573,6 +573,12 @@ public struct Accessor<Value> {
       set: { value = $0 }
     )
   }
+
+  public func modify(update: (inout Value) -> Void) {
+    var current = get()
+    update(&current)
+    set(current)
+  }
 }
 
 public struct FailableAccessor<Value> {
@@ -593,6 +599,12 @@ public struct FailableAccessor<Value> {
       get: { value },
       set: { value = $0; return () }
     )
+  }
+
+  public func modify(update: (inout Value) -> Void) throws {
+    var current = try get()
+    update(&current)
+    try set(current)
   }
 }
 
