@@ -323,11 +323,11 @@ extension Result {
     }
   }
 
-  public func getSuccessOr(_ fallback: () -> Success) -> Success {
+  public func getSuccessOr(_ fallback: (Failure) -> Success) -> Success {
     whenSuccess(self) {
       $0
-    } else: { _ in
-      fallback()
+    } else: {
+      fallback($0)
     }
   }
 
