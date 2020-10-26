@@ -579,6 +579,16 @@ public struct Accessor<Value> {
     update(&current)
     set(current)
   }
+  
+  public func pullback<Subvalue>(_ keyPath: WritableKeyPath<Value, Subvalue>) -> Accessor<Subvalue> {
+    Accessor<Subvalue> {
+      self.get()[keyPath: keyPath]
+    } set: {
+      var value = self.get()
+      value[keyPath: keyPath] = $0
+      self.set(value)
+    }
+  }
 }
 
 public struct FailableAccessor<Value> {
@@ -600,11 +610,21 @@ public struct FailableAccessor<Value> {
       set: { value = $0; return () }
     )
   }
-
+  
   public func modify(update: (inout Value) -> Void) throws {
     var current = try get()
     update(&current)
     try set(current)
+  }
+    
+  public func pullback<Subvalue>(_ keyPath: WritableKeyPath<Value, Subvalue>) -> FailableAccessor<Subvalue> {
+    FailableAccessor<Subvalue> {
+      try self.get()[keyPath: keyPath]
+    } set: {
+      var value = try self.get()
+      value[keyPath: keyPath] = $0
+      try self.set(value)
+    }
   }
 }
 
