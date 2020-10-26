@@ -37,7 +37,7 @@ public func &> <Input>(value: Input, function: (inout Input) throws -> Void) ret
   return m_value
 }
 
-precedencegroup ForwardFunctionCompositionPrecedence{
+precedencegroup ForwardFunctionCompositionPrecedence {
   associativity: left
   lowerThan: TernaryPrecedence
   higherThan: FunctionArrowPrecedence
@@ -277,10 +277,10 @@ extension Optional {
 
 public func whenSuccess<A, E, B>(_ result: Result<A, E>, then ifSuccess: (A) -> B, else ifFailure: (E) -> B) -> B {
   switch result {
-  case .success(let value):
+  case let .success(value):
     return ifSuccess(value)
 
-  case .failure(let error):
+  case let .failure(error):
     return ifFailure(error)
   }
 }
@@ -291,7 +291,7 @@ extension Result {
     orFailWith getError: (Success) -> Failure
   ) -> Self {
     switch self {
-    case .success(let value):
+    case let .success(value):
       return when(condition(value)) {
         self
       } else: {
@@ -579,7 +579,7 @@ public struct Accessor<Value> {
     update(&current)
     set(current)
   }
-  
+
   public func pullback<Subvalue>(_ keyPath: WritableKeyPath<Value, Subvalue>) -> Accessor<Subvalue> {
     Accessor<Subvalue> {
       self.get()[keyPath: keyPath]
@@ -610,13 +610,13 @@ public struct FailableAccessor<Value> {
       set: { value = $0; return () }
     )
   }
-  
+
   public func modify(update: (inout Value) -> Void) throws {
     var current = try get()
     update(&current)
     try set(current)
   }
-    
+
   public func pullback<Subvalue>(_ keyPath: WritableKeyPath<Value, Subvalue>) -> FailableAccessor<Subvalue> {
     FailableAccessor<Subvalue> {
       try self.get()[keyPath: keyPath]
@@ -624,6 +624,16 @@ public struct FailableAccessor<Value> {
       var value = try self.get()
       value[keyPath: keyPath] = $0
       try self.set(value)
+    }
+  }
+}
+
+extension Accessor {
+  public init(failable: FailableAccessor<Value>, recover: @escaping () -> Value) {
+    self.init {
+      (try? failable.get()) ?? recover()
+    } set: {
+      try? failable.set($0)
     }
   }
 }
