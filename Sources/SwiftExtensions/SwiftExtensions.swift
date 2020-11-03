@@ -174,6 +174,12 @@ extension FuncRepresentable {
       }
     )
   }
+
+  public func appending(_ transform: @escaping (inout Output) -> Void) -> Self {
+    self &> {
+      $0.append(transform)
+    }
+  }
 }
 
 extension FuncRepresentable where Input == Void {
