@@ -149,24 +149,46 @@ public struct Func<Input, Output> {
   public init(_ run: @escaping (Input) -> Output) {
     self.run = run
   }
+}
 
+public protocol FuncRepresentable {
+  associatedtype Input
+  associatedtype Output
+
+  var funcValue: Func<Input, Output> { get }
+  init(funcValue: Func<Input, Output>)
+}
+
+extension FuncRepresentable {
   public func callAsFunction(_ input: Input) -> Output {
-    run(input)
+    funcValue.run(input)
   }
 
   public mutating func append(_ transform: @escaping (inout Output) -> Void) {
-    let current = run
-    run = {
-      var output = current($0)
-      transform(&output)
-      return output
-    }
+    let current = funcValue
+    self = Self(
+      funcValue: Func { (input: Input) -> Output in
+        var output = current.run(input)
+        transform(&output)
+        return output
+      }
+    )
   }
 }
 
-extension Func where Input == Void {
+extension FuncRepresentable where Input == Void {
   public func callAsFunction() -> Output {
-    run(())
+    funcValue.run(())
+  }
+}
+
+extension Func: FuncRepresentable {
+  public var funcValue: Func<Input, Output> {
+    self
+  }
+
+  public init(funcValue: Func<Input, Output>) {
+    self = funcValue
   }
 }
 
