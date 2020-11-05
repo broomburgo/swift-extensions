@@ -716,6 +716,51 @@ extension Wrapper where Wrapped: Collection {
   }
 }
 
+// MARK: - Deriving protocols
+
+public protocol DerivingHashable: Hashable {
+  associatedtype HashableSource: Hashable
+
+  var hashableSource: HashableSource { get }
+}
+
+extension DerivingHashable {
+  public var hashValue: Int {
+    hashableSource.hashValue
+  }
+
+  public func hash(into hasher: inout Hasher) {
+    hashableSource.hash(into: &hasher)
+  }
+}
+
+public protocol DerivingEncodable: Encodable {
+  associatedtype EncodableSource: Encodable
+
+  var encodableSource: EncodableSource { get }
+}
+
+extension DerivingEncodable {
+  public func encode(to encoder: Encoder) throws {
+    try encodableSource.encode(to: encoder)
+  }
+}
+
+public protocol DerivingDecodable: Decodable {
+  associatedtype DecodableSource: Decodable
+
+  init(decodableSource: DecodableSource)
+}
+
+extension DerivingDecodable {
+  public init(from decoder: Decoder) throws {
+    self.init(decodableSource: try DecodableSource(from: decoder))
+  }
+}
+
+public typealias DerivingCodable = DerivingEncodable & DerivingDecodable
+
+
 // MARK: - Unit
 
 /// The `Unit` type, completely equivalent to `Void`, but useful for `Equatable`, `Hashable` and `Codable` purposes.
