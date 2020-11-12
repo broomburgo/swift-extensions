@@ -771,3 +771,33 @@ public struct Unit: Hashable, Codable {
 }
 
 public let unit = Unit()
+
+// MARK: - Atomic
+
+/// Masks `DispatchQueue`, without requiring `Foundation`.
+public protocol Synchronized {
+  func sync<Output>(execute: () throws -> Output) rethrows -> Output
+}
+
+/// Wraps a mutable value and ensures atomic access to it.
+///
+/// source: https://www.objc.io/blog/2018/12/18/atomic-variables/
+public final class Atomic<Queue: Synchronized, Wrapped> {
+  private let queue: Queue
+  private var value: Wrapped
+  
+  public init(queue: Queue, value: Wrapped) {
+    self.queue = queue
+    self.value = value
+  }
+
+  public var get: Wrapped {
+    queue.sync { self.value }
+  }
+
+  public func modify(_ transform: (inout Wrapped) -> Void) {
+    queue.sync {
+      transform(&self.value)
+    }
+  }
+}
