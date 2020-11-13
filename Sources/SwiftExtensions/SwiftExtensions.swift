@@ -330,10 +330,20 @@ extension Result {
     }
   }
   
-  public func forSuccess(_ onSuccess: (Success) -> Void, failure onFailure: (Failure) -> Void) {
+  public func forSuccess(_ onSuccess: (Success) -> Void) {
     switch self {
     case .success(let value):
       onSuccess(value)
+    
+    case .failure:
+      break
+    }
+  }
+  
+  public func forFailure(_ onFailure: (Failure) -> Void) {
+    switch self {
+    case .success:
+      break
     
     case .failure(let error):
       onFailure(error)
