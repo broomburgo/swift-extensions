@@ -1,89 +1,3 @@
-// MARK: - Accessor
-
-public struct Accessor<Value> {
-  public var get: () -> Value
-  public var set: (Value) -> Void
-
-  public init(
-    get: @escaping () -> Value,
-    set: @escaping (Value) -> Void
-  ) {
-    self.get = get
-    self.set = set
-  }
-
-  public init(initial: Value) {
-    var value = initial
-    self.init(
-      get: { value },
-      set: { value = $0 }
-    )
-  }
-
-  public func modify(update: (inout Value) -> Void) {
-    var current = get()
-    update(&current)
-    set(current)
-  }
-
-  public func pullback<Subvalue>(_ keyPath: WritableKeyPath<Value, Subvalue>) -> Accessor<Subvalue> {
-    Accessor<Subvalue> {
-      self.get()[keyPath: keyPath]
-    } set: {
-      var value = self.get()
-      value[keyPath: keyPath] = $0
-      self.set(value)
-    }
-  }
-}
-
-public struct FailableAccessor<Value> {
-  public var get: () throws -> Value
-  public var set: (Value) throws -> Void
-
-  public init(
-    get: @escaping () throws -> Value,
-    set: @escaping (Value) throws -> Void
-  ) {
-    self.get = get
-    self.set = set
-  }
-
-  public init(initial: Value) {
-    var value = initial
-    self.init(
-      get: { value },
-      set: { value = $0; return () }
-    )
-  }
-
-  public func modify(update: (inout Value) -> Void) throws {
-    var current = try get()
-    update(&current)
-    try set(current)
-  }
-
-  public func pullback<Subvalue>(_ keyPath: WritableKeyPath<Value, Subvalue>) -> FailableAccessor<Subvalue> {
-    FailableAccessor<Subvalue> {
-      try self.get()[keyPath: keyPath]
-    } set: {
-      var value = try self.get()
-      value[keyPath: keyPath] = $0
-      try self.set(value)
-    }
-  }
-}
-
-extension Accessor {
-  public init(failable: FailableAccessor<Value>, recover: @escaping () -> Value) {
-    self.init {
-      (try? failable.get()) ?? recover()
-    } set: {
-      try? failable.set($0)
-    }
-  }
-}
-
 // MARK: - Atomic
 
 /// Masks `DispatchQueue`, without requiring `Foundation`.
@@ -281,6 +195,103 @@ extension Func: FuncRepresentable {
 
   public init(funcValue: Func<Input, Output>) {
     self = funcValue
+  }
+}
+
+// MARK: - Lens
+
+@dynamicMemberLookup
+public struct Lens<Value> {
+  private let get: () -> Value
+  private let set: (Value) -> Void
+
+  public init(
+    get: @escaping () -> Value,
+    set: @escaping (Value) -> Void
+  ) {
+    self.get = get
+    self.set = set
+  }
+
+  public init(initial: Value) {
+    var value = initial
+    self.init(
+      get: { value },
+      set: { value = $0 }
+    )
+  }
+
+  public var value: Value {
+    get {
+      get()
+    }
+    nonmutating set {
+      set(newValue)
+    }
+  }
+
+  public subscript<NewValue>(dynamicMember keyPath: WritableKeyPath<Value, NewValue>) -> Lens<NewValue> {
+    Lens<NewValue> {
+      self.value[keyPath: keyPath]
+    } set: {
+      self.value[keyPath: keyPath] = $0
+    }
+  }
+}
+
+@dynamicMemberLookup
+public struct ThrowingLens<Value> {
+  private let get: () throws -> Value
+  private let set: (Value) throws -> Void
+
+  public init(
+    get: @escaping () throws -> Value,
+    set: @escaping (Value) throws -> Void
+  ) {
+    self.get = get
+    self.set = set
+  }
+
+  public init(initial: Value) {
+    var value = initial
+    self.init(
+      get: { value },
+      set: { value = $0 }
+    )
+  }
+
+  public func callAsFunction() throws -> Value {
+    try get()
+  }
+
+  public func callAsFunction(set newValue: Value) throws {
+    try set(newValue)
+  }
+
+  public func callAsFunction(modify transform: (inout Value) -> Void) throws {
+    var current = try get()
+    transform(&current)
+    try set(current)
+  }
+
+  public subscript<NewValue>(dynamicMember keyPath: WritableKeyPath<Value, NewValue>) -> ThrowingLens<NewValue> {
+    ThrowingLens<NewValue> {
+      try self()[keyPath: keyPath]
+    } set: {
+      var value = try self()
+      value[keyPath: keyPath] = $0
+      try self(set: value)
+    }
+  }
+}
+
+extension Lens {
+  public init(throwing: ThrowingLens<Value>, recover: @escaping () -> Value) {
+    self.init {
+      (try? throwing()) ?? recover()
+    } set: {
+      try? throwing(set: $0)
+    }
   }
 }
 
