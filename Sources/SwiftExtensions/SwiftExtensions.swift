@@ -146,29 +146,15 @@ extension Bool {
 
 // MARK: - Deriving
 
-public protocol DerivingCollection: Collection where
-  Index == CollectionSource.Index,
-  Element == CollectionSource.Element {
-  associatedtype CollectionSource: Collection
+public protocol DerivingEquatable: Equatable {
+  associatedtype EquatableSource: Equatable
 
-  var collectionSource: CollectionSource { get }
+  var equatableSource: EquatableSource { get }
 }
 
-extension DerivingCollection {
-  public var startIndex: Index {
-    collectionSource.startIndex
-  }
-
-  public var endIndex: Index {
-    collectionSource.endIndex
-  }
-
-  public subscript(position: Index) -> Element {
-    collectionSource[position]
-  }
-
-  public func index(after i: Index) -> Index {
-    collectionSource.index(after: i)
+extension DerivingEquatable {
+  public static func == (lhs: Self, rhs: Self) -> Bool {
+    lhs.equatableSource == rhs.equatableSource
   }
 }
 
@@ -213,6 +199,32 @@ extension DerivingDecodable {
 }
 
 public typealias DerivingCodable = DerivingEncodable & DerivingDecodable
+
+public protocol DerivingCollection: Collection where
+  Index == CollectionSource.Index,
+  Element == CollectionSource.Element {
+  associatedtype CollectionSource: Collection
+
+  var collectionSource: CollectionSource { get }
+}
+
+extension DerivingCollection {
+  public var startIndex: Index {
+    collectionSource.startIndex
+  }
+
+  public var endIndex: Index {
+    collectionSource.endIndex
+  }
+
+  public subscript(position: Index) -> Element {
+    collectionSource[position]
+  }
+
+  public func index(after i: Index) -> Index {
+    collectionSource.index(after: i)
+  }
+}
 
 // MARK: - Func
 
