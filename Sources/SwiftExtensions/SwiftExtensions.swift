@@ -140,64 +140,6 @@ extension DerivingCollection {
   }
 }
 
-// MARK: - Func
-
-public struct Func<Input, Output> {
-  public var run: (Input) -> Output
-
-  public init(_ run: @escaping (Input) -> Output) {
-    self.run = run
-  }
-}
-
-public protocol FuncRepresentable {
-  associatedtype Input
-  associatedtype Output
-
-  var funcValue: Func<Input, Output> { get }
-
-  init(funcValue: Func<Input, Output>)
-}
-
-extension FuncRepresentable {
-  public func callAsFunction(_ input: Input) -> Output {
-    funcValue.run(input)
-  }
-
-  public mutating func append(_ transform: @escaping (inout Output) -> Void) {
-    let current = funcValue
-    self = Self(
-      funcValue: Func { (input: Input) -> Output in
-        var output = current.run(input)
-        transform(&output)
-        return output
-      }
-    )
-  }
-
-  public func appending(_ transform: @escaping (inout Output) -> Void) -> Self {
-    self &> {
-      $0.append(transform)
-    }
-  }
-}
-
-extension FuncRepresentable where Input == Void {
-  public func callAsFunction() -> Output {
-    funcValue.run(())
-  }
-}
-
-extension Func: FuncRepresentable {
-  public var funcValue: Func<Input, Output> {
-    self
-  }
-
-  public init(funcValue: Func<Input, Output>) {
-    self = funcValue
-  }
-}
-
 // MARK: - Lens
 
 @dynamicMemberLookup
@@ -320,16 +262,6 @@ public func absurd<A>(_ never: Never) -> A {}
 
 // MARK: - Optional
 
-public func whenSome<A, B>(_ value: A?, then ifSome: (A) -> B, else ifNone: () -> B) -> B {
-  switch value {
-  case let .some(x):
-    return ifSome(x)
-
-  case .none:
-    return ifNone()
-  }
-}
-
 public func optionally<A>(_ condition: Bool, then ifTrue: () -> A) -> A? {
   if condition {
     return ifTrue()
@@ -341,7 +273,7 @@ public func optionally<A>(_ condition: Bool, then ifTrue: () -> A) -> A? {
 extension Optional {
   public func filter(_ condition: (Wrapped) -> Bool) -> Self {
     switch self {
-    case let .some(value) where condition(value):
+    case let value? where condition(value):
       return self
 
     default:
@@ -350,33 +282,23 @@ extension Optional {
   }
 
   public func forEach(_ run: (Wrapped) -> Void) {
-    whenSome(self) {
-      run($0)
-    } else: {
-      /// ignore
+    guard let wrapped = self else {
+      return
     }
+    
+    run(wrapped)
   }
 
   public func unwrapOr(_ fallback: () -> Wrapped) -> Wrapped {
-    whenSome(self) {
-      $0
-    } else: {
-      fallback()
+    guard let wrapped = self else {
+      return fallback()
     }
+    
+    return wrapped
   }
 }
 
 // MARK: - Result
-
-public func whenSuccess<A, E, B>(_ result: Result<A, E>, then ifSuccess: (A) -> B, else ifFailure: (E) -> B) -> B {
-  switch result {
-  case let .success(value):
-    return ifSuccess(value)
-
-  case let .failure(error):
-    return ifFailure(error)
-  }
-}
 
 extension Result {
   public func filter(
@@ -384,52 +306,52 @@ extension Result {
     orFailWith getError: (Success) -> Failure
   ) -> Self {
     switch self {
-    case let .success(value):
-      return when(condition(value)) {
-        self
-      } else: {
-        .failure(getError(value))
-      }
+    case .success(let value) where condition(value):
+      return self
 
     default:
-      return self
+      return flatMap {
+        .failure(getError($0))
+      }
     }
   }
-
+  
   public func or(_ getFallback: () -> Self) -> Self {
     flatMapError { _ in getFallback() }
   }
+  
+  public func getSuccessOr(_ fallback: (Failure) -> Success) -> Success {
+    switch self {
+    case .success(let value):
+      return value
+      
+    case .failure(let error):
+      return fallback(error)
+    }
+  }
+  
+  public func forSuccess(_ onSuccess: (Success) -> Void, failure onFailure: (Failure) -> Void) {
+    switch self {
+    case .success(let value):
+      onSuccess(value)
+    
+    case .failure(let error):
+      onFailure(error)
+    }
+  }
 
   public var isSuccess: Bool {
-    whenSuccess(self) { _ in
-      true
-    } else: { _ in
-      false
+    switch self {
+    case .success:
+      return true
+      
+    case .failure:
+      return false
     }
   }
 
   public var isFailure: Bool {
-    whenSuccess(self) { _ in
-      false
-    } else: { _ in
-      true
-    }
-  }
-
-  public func getSuccessOr(_ fallback: (Failure) -> Success) -> Success {
-    whenSuccess(self) {
-      $0
-    } else: {
-      fallback($0)
-    }
-  }
-
-  public init(ifNotNil success: Success?, elseFailWith getError: @autoclosure () -> Failure) {
-    self = whenSome(success) {
-      .success($0)
-    } else: {
-      .failure(getError())
-    }
+    isSuccess.not
   }
 }
 
