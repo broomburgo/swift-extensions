@@ -1,44 +1,4 @@
-// MARK: - Atomic
-
-/// Masks `DispatchQueue`, without requiring `Foundation`.
-///
-/// Requires serial execution of work.
-public protocol Synchronized {
-  func sync<Output>(execute: () throws -> Output) rethrows -> Output
-}
-
-/// Wraps a mutable value and ensures atomic access to it.
-///
-/// source: https://www.objc.io/blog/2018/12/18/atomic-variables/
-public final class Atomic<Queue: Synchronized, Wrapped> {
-  private let queue: Queue
-  private var value: Wrapped
-
-  public init(queue: Queue, value: Wrapped) {
-    self.queue = queue
-    self.value = value
-  }
-
-  public var get: Wrapped {
-    queue.sync { value }
-  }
-
-  public func modify(_ transform: (inout Wrapped) -> Void) {
-    queue.sync {
-      transform(&value)
-    }
-  }
-}
-
-// MARK: - Bool
-
-public func when<A>(_ condition: Bool, then ifTrue: () -> A, else ifFalse: () -> A) -> A {
-  if condition {
-    return ifTrue()
-  } else {
-    return ifFalse()
-  }
-}
+// MARK: - Boolean
 
 precedencegroup LogicalImplicationPrecedence {
   associativity: right
@@ -48,12 +8,12 @@ precedencegroup LogicalImplicationPrecedence {
 
 infix operator =>: LogicalImplicationPrecedence
 
-extension Bool {
-  public static func => (_ lhs: Bool, _ rhs: @autoclosure () -> Bool) -> Bool {
+public extension Bool {
+  static func => (_ lhs: Bool, _ rhs: @autoclosure () -> Bool) -> Bool {
     !lhs || rhs()
   }
 
-  public var not: Bool {
+  var not: Bool {
     !self
   }
 }
@@ -66,8 +26,8 @@ public protocol DerivingEquatable: Equatable {
   var equatableSource: EquatableSource { get }
 }
 
-extension DerivingEquatable {
-  public static func == (lhs: Self, rhs: Self) -> Bool {
+public extension DerivingEquatable {
+  static func == (lhs: Self, rhs: Self) -> Bool {
     lhs.equatableSource == rhs.equatableSource
   }
 }
@@ -78,12 +38,12 @@ public protocol DerivingHashable: Hashable {
   var hashableSource: HashableSource { get }
 }
 
-extension DerivingHashable {
-  public var hashValue: Int {
+public extension DerivingHashable {
+  var hashValue: Int {
     hashableSource.hashValue
   }
 
-  public func hash(into hasher: inout Hasher) {
+  func hash(into hasher: inout Hasher) {
     hashableSource.hash(into: &hasher)
   }
 }
@@ -94,8 +54,8 @@ public protocol DerivingEncodable: Encodable {
   var encodableSource: EncodableSource { get }
 }
 
-extension DerivingEncodable {
-  public func encode(to encoder: Encoder) throws {
+public extension DerivingEncodable {
+  func encode(to encoder: Encoder) throws {
     try encodableSource.encode(to: encoder)
   }
 }
@@ -106,8 +66,8 @@ public protocol DerivingDecodable: Decodable {
   init(decodableSource: DecodableSource)
 }
 
-extension DerivingDecodable {
-  public init(from decoder: Decoder) throws {
+public extension DerivingDecodable {
+  init(from decoder: Decoder) throws {
     self.init(decodableSource: try DecodableSource(from: decoder))
   }
 }
@@ -116,26 +76,27 @@ public typealias DerivingCodable = DerivingEncodable & DerivingDecodable
 
 public protocol DerivingCollection: Collection where
   Index == CollectionSource.Index,
-  Element == CollectionSource.Element {
+  Element == CollectionSource.Element
+{
   associatedtype CollectionSource: Collection
 
   var collectionSource: CollectionSource { get }
 }
 
-extension DerivingCollection {
-  public var startIndex: Index {
+public extension DerivingCollection {
+  var startIndex: Index {
     collectionSource.startIndex
   }
 
-  public var endIndex: Index {
+  var endIndex: Index {
     collectionSource.endIndex
   }
 
-  public subscript(position: Index) -> Element {
+  subscript(position: Index) -> Element {
     collectionSource[position]
   }
 
-  public func index(after i: Index) -> Index {
+  func index(after i: Index) -> Index {
     collectionSource.index(after: i)
   }
 }
@@ -144,8 +105,8 @@ extension DerivingCollection {
 
 @dynamicMemberLookup
 public struct Lens<Value> {
-  private let get: () -> Value
-  private let set: (Value) -> Void
+  private var get: () -> Value
+  private var set: (Value) -> Void
 
   public init(
     get: @escaping () -> Value,
@@ -181,62 +142,6 @@ public struct Lens<Value> {
   }
 }
 
-@dynamicMemberLookup
-public struct ThrowingLens<Value> {
-  private let get: () throws -> Value
-  private let set: (Value) throws -> Void
-
-  public init(
-    get: @escaping () throws -> Value,
-    set: @escaping (Value) throws -> Void
-  ) {
-    self.get = get
-    self.set = set
-  }
-
-  public init(initial: Value) {
-    var value = initial
-    self.init(
-      get: { value },
-      set: { value = $0 }
-    )
-  }
-
-  public func callAsFunction() throws -> Value {
-    try get()
-  }
-
-  public func callAsFunction(set newValue: Value) throws {
-    try set(newValue)
-  }
-
-  public func callAsFunction(modify transform: (inout Value) -> Void) throws {
-    var current = try get()
-    transform(&current)
-    try set(current)
-  }
-
-  public subscript<NewValue>(dynamicMember keyPath: WritableKeyPath<Value, NewValue>) -> ThrowingLens<NewValue> {
-    ThrowingLens<NewValue> {
-      try self()[keyPath: keyPath]
-    } set: {
-      var value = try self()
-      value[keyPath: keyPath] = $0
-      try self(set: value)
-    }
-  }
-}
-
-extension Lens {
-  public init(throwing: ThrowingLens<Value>, recover: @escaping () -> Value) {
-    self.init {
-      (try? throwing()) ?? recover()
-    } set: {
-      try? throwing(set: $0)
-    }
-  }
-}
-
 // MARK: - Operators
 
 precedencegroup FunctionApplicationPrecedence {
@@ -258,8 +163,6 @@ public func &> <Input>(value: Input, function: (inout Input) throws -> Void) ret
   return m_value
 }
 
-public func absurd<A>(_ never: Never) -> A {}
-
 // MARK: - Optional
 
 public func optionally<A>(_ condition: Bool, then ifTrue: () -> A) -> A? {
@@ -270,117 +173,60 @@ public func optionally<A>(_ condition: Bool, then ifTrue: () -> A) -> A? {
   }
 }
 
-extension Optional {
-  public func filter(_ condition: (Wrapped) -> Bool) -> Self {
-    switch self {
-    case let value? where condition(value):
-      return self
-
-    default:
+public extension Optional {
+  func filter(_ condition: (Wrapped) -> Bool) -> Self {
+    guard let wrapped = self, condition(wrapped) else {
       return nil
     }
-  }
 
-  public func forEach(_ run: (Wrapped) -> Void) {
-    guard let wrapped = self else {
-      return
-    }
-    
-    run(wrapped)
-  }
-
-  public func unwrapOr(_ fallback: () -> Wrapped) -> Wrapped {
-    guard let wrapped = self else {
-      return fallback()
-    }
-    
-    return wrapped
+    return self
   }
 }
 
 // MARK: - Result
 
-extension Result {
-  public func filter(
+public extension Result {
+  func filter(
     _ condition: (Success) -> Bool,
     orFailWith getError: (Success) -> Failure
   ) -> Self {
-    switch self {
-    case .success(let value) where condition(value):
-      return self
-
-    default:
+    guard case .success(let value) = self, condition(value) else {
       return flatMap {
         .failure(getError($0))
       }
     }
+
+    return self
   }
-  
-  public func or(_ getFallback: () -> Self) -> Self {
-    flatMapError { _ in getFallback() }
-  }
-  
-  public func getSuccessOr(_ fallback: (Failure) -> Success) -> Success {
+
+  func getSuccessOr(_ fallback: (Failure) -> Success) -> Success {
     switch self {
     case .success(let value):
       return value
-      
+
     case .failure(let error):
       return fallback(error)
     }
   }
-  
-  public func forSuccess(_ onSuccess: (Success) -> Void) {
-    switch self {
-    case .success(let value):
-      onSuccess(value)
-    
-    case .failure:
-      break
-    }
-  }
-  
-  public func forFailure(_ onFailure: (Failure) -> Void) {
-    switch self {
-    case .success:
-      break
-    
-    case .failure(let error):
-      onFailure(error)
-    }
-  }
-
-  public var isSuccess: Bool {
-    switch self {
-    case .success:
-      return true
-      
-    case .failure:
-      return false
-    }
-  }
-
-  public var isFailure: Bool {
-    isSuccess.not
-  }
 }
 
-// MARK: - Utility
+// MARK: - Collections
 
-extension Equatable {
-  public func isContained<S: Sequence>(in s: S) -> Bool where S.Element == Self {
+public extension Equatable {
+  /// Dual of the `contains` method on `Sequence`.
+  func isContained<S: Sequence>(in s: S) -> Bool where S.Element == Self {
     s.contains(self)
   }
 }
 
-extension Hashable {
-  public func subscripting<Value>(_ dict: [Self: Value]) -> Value? {
+public extension Hashable {
+  func subscripting<Value>(_ dict: [Self: Value]) -> Value? {
     dict[self]
   }
 }
 
-extension Comparable {
-  public func clamped(in range: ClosedRange<Self>) -> Self {
+public extension Comparable {
+  func clamped(in range: ClosedRange<Self>) -> Self {
     switch self {
     case ..<range.lowerBound:
       return range.lowerBound
@@ -394,31 +240,39 @@ extension Comparable {
   }
 
   /// Dual of the `contains` method on `ClosedRange`.
-  public func isContained(in range: ClosedRange<Self>) -> Bool {
+  func isContained(in range: ClosedRange<Self>) -> Bool {
     range.contains(self)
   }
 
   /// Dual of the `contains` method on `Range`.
-  public func isContained(in range: Range<Self>) -> Bool {
+  func isContained(in range: Range<Self>) -> Bool {
     range.contains(self)
   }
 }
 
-extension Collection {
-  public var decomposed: (first: Element, rest: DropFirstSequence<Self>)? {
+public extension Collection {
+  var decomposed: (first: Element, rest: DropFirstSequence<Self>)? {
     first.map { ($0, dropFirst()) }
   }
 }
 
-extension RandomAccessCollection {
-  public subscript(safely index: Index) -> Element? {
+public extension BidirectionalCollection {
+  var decomposedLast: (last: Element, rest: [Element])? {
+    last.map { ($0, dropLast()) }
+  }
+}
+
+public extension RandomAccessCollection {
+  subscript(safely index: Index) -> Element? {
     guard indices.contains(index) else { return nil }
     return self[index]
   }
 }
 
-extension String.StringInterpolation {
-  public mutating func appendInterpolation<A>(_ optionalValue: A?, or defaultString: String) {
+// MARK: - StringInterpolation
+
+public extension String.StringInterpolation {
+  mutating func appendInterpolation<A>(_ optionalValue: A?, or defaultString: String) {
     guard let value = optionalValue else {
       appendInterpolation(defaultString)
       return
@@ -426,4 +280,253 @@ extension String.StringInterpolation {
 
     appendInterpolation(value)
   }
+}
+
+// MARK: - Synchronous/Asynchronous
+
+/// Masks `DispatchQueue.sync`, without requiring `Foundation`.
+///
+/// Conform with:
+/// ```
+/// extension DispatchQueue: Synchronous {
+///   public func runSync<Output>(_ execute: () throws -> Output) rethrows -> Output {
+///     try sync(execute: execute)
+///   }
+/// }
+/// ```
+public protocol Synchronous {
+  func runSync<Output>(_: () throws -> Output) rethrows -> Output
+}
+
+/// Masks `DispatchQueue.async`, without requiring `Foundation`.
+///
+/// Requires serial execution of work.
+///
+/// Conform with:
+/// ```
+/// extension DispatchQueue: Asynchronous {
+///   public func runAsync(_ execute: () -> Void) {
+///     async(execute: execute)
+///   }
+/// }
+/// ```
+public protocol Asynchronous {
+  func runAsync(_: @escaping () -> Void)
+}
+
+// MARK: - Atomic
+
+/// Wraps a mutable value and ensures atomic access to it.
+///
+/// source: https://www.objc.io/blog/2018/12/18/atomic-variables/
+public final class Atomic<Queue: Synchronous, Wrapped> {
+  private let queue: Queue
+  private var value: Wrapped
+
+  public init(queue: Queue, value: Wrapped) {
+    self.queue = queue
+    self.value = value
+  }
+
+  public var get: Wrapped {
+    queue.runSync { value }
+  }
+
+  public func mutate(_ transform: (inout Wrapped) -> Void) {
+    queue.runSync {
+      transform(&value)
+    }
+  }
+}
+
+// MARK: - Async
+
+/// While waiting for async/await, this will do.
+public struct Async<Success> {
+  private var _run: (@escaping (Result<Success, Error>) -> Void) -> Void
+
+  public init(run: @escaping (@escaping (Result<Success, Error>) -> Void) -> Void) {
+    self._run = run
+  }
+
+  public init(_ result: Result<Success, Error>) {
+    self.init { yield in
+      yield(result)
+    }
+  }
+
+  public func run(_ callback: @escaping (Result<Success, Error>) -> Void) {
+    _run(callback)
+  }
+}
+
+public extension Async {
+  func map<NewSuccess>(
+    _ transform: @escaping (Success) -> NewSuccess
+  ) -> Async<NewSuccess> {
+    Async<NewSuccess> { yield in
+      self._run {
+        yield(
+          $0.map(transform)
+        )
+      }
+    }
+  }
+
+  func flatMap<NewSuccess>(
+    _ transform: @escaping (Success) -> Async<NewSuccess>
+  ) -> Async<NewSuccess> {
+    Async<NewSuccess> { yield in
+      self._run {
+        switch $0 {
+        case .success(let value):
+          transform(value)._run(yield)
+
+        case .failure(let error):
+          yield(.failure(error))
+        }
+      }
+    }
+  }
+
+  func flatMapError(
+    _ transform: @escaping (Error) -> Async<Success>
+  ) -> Self {
+    Async { yield in
+      self._run {
+        switch $0 {
+        case .success(let value):
+          yield(.success(value))
+
+        case .failure(let error):
+          transform(error)._run(yield)
+        }
+      }
+    }
+  }
+
+  func filter(
+    _ condition: @escaping (Success) -> Bool,
+    orFailWith getError: @escaping (Success) -> Error
+  ) -> Self {
+    flatMap {
+      if condition($0) {
+        return Async(.success($0))
+      } else {
+        return Async(.failure(getError($0)))
+      }
+    }
+  }
+
+  func zipWith<OtherSuccess, FinalSuccess>(
+    _ other: Async<OtherSuccess>,
+    transform: @escaping (Success, OtherSuccess) -> FinalSuccess,
+    uniquingErrorsWith mergeErrors: @escaping (Error, Error) -> Error = { first, _ in first }
+  ) -> Async<FinalSuccess> {
+    Async<FinalSuccess> { yield in
+      var resultSelf: Result<Success, Error>? {
+        didSet {
+          yieldIfPossible(resultSelf, resultOther)
+        }
+      }
+
+      var resultOther: Result<OtherSuccess, Error>? {
+        didSet {
+          yieldIfPossible(resultSelf, resultOther)
+        }
+      }
+
+      self._run {
+        resultSelf = $0
+      }
+
+      other._run {
+        resultOther = $0
+      }
+
+      func yieldIfPossible(_ t1Result: Result<Success, Error>?, _ t2Result: Result<OtherSuccess, Error>?) {
+        guard
+          let t1Result = t1Result,
+          let t2Result = t2Result
+        else {
+          return
+        }
+
+        switch (t1Result, t2Result) {
+        case (.success(let value1), .success(let value2)):
+          yield(.success(transform(value1, value2)))
+
+        case (.failure(let error1), .failure(let error2)):
+          yield(.failure(mergeErrors(error1, error2)))
+
+        case (.failure(let error), .success(_)),
+             (.success(_), .failure(let error)):
+          yield(.failure(error))
+        }
+      }
+    }
+  }
+
+  func zipWithAll<FinalSuccess>(
+    in rest: [Self],
+    transform: @escaping ([Success]) -> FinalSuccess,
+    uniquingErrorsWith mergeErrors: @escaping (Error, Error) -> Error = { first, _ in first }
+  ) -> Async<FinalSuccess> {
+    rest
+      .reduce(map { [$0] }) {
+        $0.zipWith($1) {
+          var m = $0
+          m.append($1)
+          return m
+        } uniquingErrorsWith: {
+          mergeErrors($0, $1)
+        }
+      }
+      .map {
+        transform($0)
+      }
+  }
+
+  func onResult(_ callback: @escaping (Result<Success, Error>) -> Void) -> Self {
+    Async { yield in
+      self._run {
+        callback($0)
+        yield($0)
+      }
+    }
+  }
+
+  func onSuccess(_ callback: @escaping (Success) -> Void) -> Self {
+    onResult {
+      guard case .success(let value) = $0 else {
+        return
+      }
+
+      callback(value)
+    }
+  }
+
+  func onFailure(_ callback: @escaping (Error) -> Void) -> Self {
+    onResult {
+      guard case .failure(let error) = $0 else {
+        return
+      }
+
+      callback(error)
+    }
+  }
+
+  func receive(on asynchronous: Asynchronous) -> Self {
+    Async { yield in
+      self._run { result in
+        asynchronous.runAsync {
+          yield(result)
+        }
+      }
+    }
+  }
+}
+
+public extension Async where Success == Void {
+  static let succeeded = Async(.success(()))
 }
