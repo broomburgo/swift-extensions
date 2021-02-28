@@ -341,22 +341,40 @@ public final class Atomic<Queue: Synchronous, Wrapped> {
 
 // MARK: - Async
 
+public struct Canceling {
+  public var cancel: () -> Void
+
+  public func callAsFunction() {
+    cancel()
+  }
+}
+
 /// While waiting for async/await, this will do.
 public struct Async<Success> {
-  private var _run: (@escaping (Result<Success, Error>) -> Void) -> Void
+  private var _run: (Canceling, (@escaping (Result<Success, Error>) -> Void)) -> Void
 
-  public init(run: @escaping (@escaping (Result<Success, Error>) -> Void) -> Void) {
+  public init(run: @escaping (Canceling, (@escaping (Result<Success, Error>) -> Void)) -> Void) {
     self._run = run
   }
 
   public init(_ result: Result<Success, Error>) {
-    self.init { yield in
+    self.init { _, yield in
       yield(result)
     }
   }
 
-  public func run(_ callback: @escaping (Result<Success, Error>) -> Void) {
-    _run(callback)
+  @discardableResult
+  public func run(
+    onResult: @escaping (Result<Success, Error>) -> Void,
+    onCancel: (() -> Void)? = nil
+  ) -> Canceling {
+    let cancel = Canceling {
+      onCancel?()
+    }
+
+    _run(cancel, onResult)
+
+    return cancel
   }
 }
 
@@ -364,8 +382,8 @@ public extension Async {
   func map<NewSuccess>(
     _ transform: @escaping (Success) -> NewSuccess
   ) -> Async<NewSuccess> {
-    Async<NewSuccess> { yield in
-      self._run {
+    Async<NewSuccess> { cancel, yield in
+      self._run(cancel) {
         yield(
           $0.map(transform)
         )
@@ -376,11 +394,11 @@ public extension Async {
   func flatMap<NewSuccess>(
     _ transform: @escaping (Success) -> Async<NewSuccess>
   ) -> Async<NewSuccess> {
-    Async<NewSuccess> { yield in
-      self._run {
+    Async<NewSuccess> { cancel, yield in
+      self._run(cancel) {
         switch $0 {
         case .success(let value):
-          transform(value)._run(yield)
+          transform(value)._run(cancel, yield)
 
         case .failure(let error):
           yield(.failure(error))
@@ -392,14 +410,14 @@ public extension Async {
   func flatMapError(
     _ transform: @escaping (Error) -> Async<Success>
   ) -> Self {
-    Async { yield in
-      self._run {
+    Async { cancel, yield in
+      self._run(cancel) {
         switch $0 {
         case .success(let value):
           yield(.success(value))
 
         case .failure(let error):
-          transform(error)._run(yield)
+          transform(error)._run(cancel, yield)
         }
       }
     }
@@ -423,7 +441,7 @@ public extension Async {
     transform: @escaping (Success, OtherSuccess) -> FinalSuccess,
     uniquingErrorsWith mergeErrors: @escaping (Error, Error) -> Error = { first, _ in first }
   ) -> Async<FinalSuccess> {
-    Async<FinalSuccess> { yield in
+    Async<FinalSuccess> { cancel, yield in
       var resultSelf: Result<Success, Error>? {
         didSet {
           yieldIfPossible(resultSelf, resultOther)
@@ -436,11 +454,11 @@ public extension Async {
         }
       }
 
-      self._run {
+      self._run(cancel) {
         resultSelf = $0
       }
 
-      other._run {
+      other._run(cancel) {
         resultOther = $0
       }
 
@@ -488,8 +506,8 @@ public extension Async {
   }
 
   func onResult(_ callback: @escaping (Result<Success, Error>) -> Void) -> Self {
-    Async { yield in
-      self._run {
+    Async { cancel, yield in
+      self._run(cancel) {
         callback($0)
         yield($0)
       }
@@ -515,10 +533,21 @@ public extension Async {
       callback(error)
     }
   }
+  
+  func onCancel(_ callback: @escaping () -> Void) -> Self {
+    Async { cancel, yield in
+      self._run(Canceling {
+        cancel()
+        callback()
+      }) {
+        yield($0)
+      }
+    }
+  }
 
   func receive(on asynchronous: Asynchronous) -> Self {
-    Async { yield in
-      self._run { result in
+    Async { cancel, yield in
+      self._run(cancel) { result in
         asynchronous.runAsync {
           yield(result)
         }
